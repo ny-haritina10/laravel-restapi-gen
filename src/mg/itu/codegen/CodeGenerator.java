@@ -428,23 +428,6 @@ public class CodeGenerator {
                 }
             }
         }
-        
-        // Check if this table might be referenced by other tables
-        // This requires us to make some assumptions based on naming conventions
-        String singularName = Utils.toSingular(table.getName());
-        String foreignKeyName = singularName + "_id";
-        
-        // hasMany relationship based on table name convention
-        String methodName = Utils.toCamelCase(table.getName());
-        modelCode.append("\n    /**\n");
-        modelCode.append("     * Get the related records that belong to this ").append(singularName).append(".\n");
-        modelCode.append("     * Note: This relationship is based on naming convention and might need adjustment.\n");
-        modelCode.append("     */\n");
-        modelCode.append("    public function ").append(methodName).append("()\n");
-        modelCode.append("    {\n");
-        modelCode.append("        return $this->hasMany(Related").append(Utils.toPascalCase(singularName)).append("::class, '")
-                .append(foreignKeyName).append("', '").append(table.getPrimaryKeyColumn().getName()).append("');\n");
-        modelCode.append("    }\n");
     }
 
     private void writeToFile(String filePath, String content) throws IOException {

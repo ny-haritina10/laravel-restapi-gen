@@ -1,0 +1,3 @@
+a - id is not required when storing an entity
+b - error message is handle badly 
+    . use try catch 
