@@ -7,13 +7,20 @@ public class Column {
     private String phpType;
     private boolean primaryKey;
     private boolean nullable;
+    private boolean foreignKey;
+    private String referencesTable;
+    private String referencesColumn;
     
-    public Column(String name, String dbType, String phpType, boolean primaryKey, boolean nullable) {
+    public Column(String name, String dbType, String phpType, boolean primaryKey, boolean nullable, 
+              boolean foreignKey, String referencesTable, String referencesColumn) {
         this.name = name;
         this.dbType = dbType;
         this.phpType = phpType;
         this.primaryKey = primaryKey;
         this.nullable = nullable;
+        this.foreignKey = foreignKey;
+        this.referencesTable = referencesTable;
+        this.referencesColumn = referencesColumn;
     }
     
     public String getName() {
@@ -66,5 +73,17 @@ public class Column {
     
     public boolean isTimestamp() {
         return name.equals("created_at") || name.equals("updated_at") || name.equals("deleted_at");
+    }
+
+    public boolean isForeignKey() {
+        return foreignKey;
+    }
+    
+    public String getReferencesTable() {
+        return referencesTable;
+    }
+    
+    public String getReferencesColumn() {
+        return referencesColumn;
     }
 }

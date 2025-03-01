@@ -38,7 +38,7 @@ public class Table {
             }
         }
         // Default to "id" if no primary key is found
-        return new Column("id", "integer", "integer", true, false);
+        return new Column("id", "integer", "integer", true, false, false, null, null);
     }
     
     private String toSingular(String plural) {

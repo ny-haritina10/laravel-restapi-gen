@@ -3,9 +3,12 @@ package mg.itu.codegen;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import mg.itu.data.Column;
 import mg.itu.data.Table;
+import mg.itu.utils.Utils;
 
 public class CodeGenerator {
 
@@ -78,6 +81,9 @@ public class CodeGenerator {
             modelCode.append(castsCode);
         }
         
+        // fk relationships
+        addRelationships(modelCode);
+
         modelCode.append("}\n");
         
         writeToFile(outputPath + File.separator + modelName + ".php", modelCode.toString());
@@ -167,11 +173,13 @@ public class CodeGenerator {
         controllerCode.append("     * Display the specified ").append(variableName).append(".\n");
         controllerCode.append("     *\n");
         controllerCode.append("     * @param int $id\n");
+        controllerCode.append("     * @param Request $request\n");
         controllerCode.append("     * @return JsonResponse\n");
         controllerCode.append("     */\n");
-        controllerCode.append("    public function show(int $id): JsonResponse\n");
+        controllerCode.append("    public function show(int $id, Request $request): JsonResponse\n");
         controllerCode.append("    {\n");
-        controllerCode.append("        $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id);\n");
+        controllerCode.append("        $withRelations = $request->query('with_relations', false);\n");
+        controllerCode.append("        $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id, $withRelations);\n");
         controllerCode.append("        \n");
         controllerCode.append("        if (!$").append(variableName).append(") {\n");
         controllerCode.append("            return response()->json(['message' => '").append(modelName).append(" not found'], 404);\n");
@@ -282,10 +290,14 @@ public class CodeGenerator {
         serviceCode.append("     * Find ").append(variableName).append(" by ID.\n");
         serviceCode.append("     *\n");
         serviceCode.append("     * @param int $id\n");
+        serviceCode.append("     * @param bool $withRelations\n");
         serviceCode.append("     * @return ").append(modelName).append("|null\n");
         serviceCode.append("     */\n");
-        serviceCode.append("    public function findById(int $id): ?").append(modelName).append("\n");
+        serviceCode.append("    public function findById(int $id, bool $withRelations = false): ?").append(modelName).append("\n");
         serviceCode.append("    {\n");
+        serviceCode.append("        if ($withRelations) {\n");
+        serviceCode.append("            return ").append(modelName).append("::with($this->getRelationships())->find($id);\n");
+        serviceCode.append("        }\n");
         serviceCode.append("        return ").append(modelName).append("::find($id);\n");
         serviceCode.append("    }\n\n");
         
@@ -336,6 +348,29 @@ public class CodeGenerator {
         serviceCode.append("        }\n\n");
         serviceCode.append("        return $").append(variableName).append("->delete();\n");
         serviceCode.append("    }\n");
+
+        // Helper method to get relationships
+        serviceCode.append("    /**\n");
+        serviceCode.append("     * Get relationship methods for eager loading.\n");
+        serviceCode.append("     *\n");
+        serviceCode.append("     * @return array\n");
+        serviceCode.append("     */\n");
+        serviceCode.append("    private function getRelationships(): array\n");
+        serviceCode.append("    {\n");
+        serviceCode.append("        // This is auto-generated and may need manual adjustment\n");
+        serviceCode.append("        return [\n");
+
+        // Add common relationship methods based on foreign keys
+        for (Column column : table.getColumns()) {
+            if (column.isForeignKey() && column.getReferencesTable() != null) {
+                String relatedTable = column.getReferencesTable();
+                String methodName = Utils.toCamelCase(Utils.toSingular(relatedTable));
+                serviceCode.append("            '").append(methodName).append("',\n");
+            }
+        }
+
+        serviceCode.append("        ];\n");
+        serviceCode.append("    }\n");
         serviceCode.append("}\n");
         
         writeToFile(outputPath + File.separator + serviceName + ".php", serviceCode.toString());
@@ -366,6 +401,52 @@ public class CodeGenerator {
         writeToFile(outputPath + File.separator + routeName + "_routes.php", routesCode.toString());
     }
     
+    private void addRelationships(StringBuilder modelCode) {
+        // Track tables that we've already added relationships for
+        List<String> addedRelationships = new ArrayList<>();
+        
+        for (Column column : table.getColumns()) {
+            if (column.isForeignKey() && column.getReferencesTable() != null) {
+                String relatedTable = column.getReferencesTable();
+                String relatedModel = Utils.toPascalCase(Utils.toSingular(relatedTable));
+                
+                // belongsTo relationship for the foreign key
+                String methodName = Utils.toCamelCase(Utils.toSingular(relatedTable));
+                
+                // Avoid duplicate relationships
+                if (!addedRelationships.contains(methodName)) {
+                    modelCode.append("\n    /**\n");
+                    modelCode.append("     * Get the ").append(relatedTable).append(" that this ").append(table.getName()).append(" belongs to.\n");
+                    modelCode.append("     */\n");
+                    modelCode.append("    public function ").append(methodName).append("()\n");
+                    modelCode.append("    {\n");
+                    modelCode.append("        return $this->belongsTo(").append(relatedModel).append("::class, '")
+                            .append(column.getName()).append("', '").append(column.getReferencesColumn()).append("');\n");
+                    modelCode.append("    }\n");
+                    
+                    addedRelationships.add(methodName);
+                }
+            }
+        }
+        
+        // Check if this table might be referenced by other tables
+        // This requires us to make some assumptions based on naming conventions
+        String singularName = Utils.toSingular(table.getName());
+        String foreignKeyName = singularName + "_id";
+        
+        // hasMany relationship based on table name convention
+        String methodName = Utils.toCamelCase(table.getName());
+        modelCode.append("\n    /**\n");
+        modelCode.append("     * Get the related records that belong to this ").append(singularName).append(".\n");
+        modelCode.append("     * Note: This relationship is based on naming convention and might need adjustment.\n");
+        modelCode.append("     */\n");
+        modelCode.append("    public function ").append(methodName).append("()\n");
+        modelCode.append("    {\n");
+        modelCode.append("        return $this->hasMany(Related").append(Utils.toPascalCase(singularName)).append("::class, '")
+                .append(foreignKeyName).append("', '").append(table.getPrimaryKeyColumn().getName()).append("');\n");
+        modelCode.append("    }\n");
+    }
+
     private void writeToFile(String filePath, String content) throws IOException {
         File file = new File(filePath);
         

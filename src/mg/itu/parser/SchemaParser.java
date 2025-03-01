@@ -80,14 +80,19 @@ public class SchemaParser {
         // Process each column definition
         List<Column> columns = new ArrayList<>();
         for (String colDef : columnStrings) {
-            // Skip constraints and non-column definitions
+            // Skip certain constraints
             if (colDef.toLowerCase().startsWith("constraint") ||
-                colDef.toLowerCase().startsWith("primary key") ||
-                colDef.toLowerCase().startsWith("foreign key") ||
-                colDef.toLowerCase().startsWith("unique")) {
-                continue;
+            colDef.toLowerCase().startsWith("primary key") ||
+            colDef.toLowerCase().startsWith("unique")) {
+            continue;
             }
-            
+
+            // Process foreign key constraints
+            if (colDef.toLowerCase().startsWith("foreign key")) {
+            processForeignKeyConstraint(colDef, columns);
+            continue;
+            }
+                        
             Column column = parseColumnDefinition(colDef);
             if (column != null) {
                 columns.add(column);
@@ -95,6 +100,53 @@ public class SchemaParser {
         }
         
         return columns;
+    }
+
+    private static void processForeignKeyConstraint(String constraint, List<Column> columns) {
+        // Extract column name: FOREIGN KEY (column_name) REFERENCES target_table(target_column)
+        int startCol = constraint.indexOf("(");
+        int endCol = constraint.indexOf(")");
+        if (startCol == -1 || endCol == -1) return;
+        
+        String columnName = constraint.substring(startCol + 1, endCol).trim();
+        
+        // Extract references
+        int referencesIdx = constraint.toLowerCase().indexOf("references");
+        if (referencesIdx == -1) return;
+        
+        String references = constraint.substring(referencesIdx + "references".length()).trim();
+        
+        // Parse target table and column
+        int targetTableEnd = references.indexOf("(");
+        if (targetTableEnd == -1) return;
+        
+        String targetTable = references.substring(0, targetTableEnd).trim();
+        
+        int targetColStart = references.indexOf("(");
+        int targetColEnd = references.indexOf(")", targetColStart);
+        if (targetColStart == -1 || targetColEnd == -1) return;
+        
+        String targetColumn = references.substring(targetColStart + 1, targetColEnd).trim();
+        
+        // Update the corresponding column
+        for (Column column : columns) {
+            if (column.getName().equals(columnName)) {
+                Column updatedColumn = new Column(
+                    column.getName(), 
+                    column.getDbType(), 
+                    column.getPhpType(), 
+                    column.isPrimaryKey(), 
+                    column.isNullable(),
+                    true,  // is foreign key
+                    targetTable,
+                    targetColumn
+                );
+                
+                // Replace the column in the list
+                columns.set(columns.indexOf(column), updatedColumn);
+                break;
+            }
+        }
     }
     
     private static Column parseColumnDefinition(String colDef) {
@@ -127,12 +179,33 @@ public class SchemaParser {
         // Determine if it's nullable
         boolean isNullable = !colDef.toLowerCase().contains("not null");
         
+        // Check for inline REFERENCES
+        boolean isForeignKey = false;
+        String referencesTable = null;
+        String referencesColumn = null;
+        
+        // Look for the REFERENCES keyword
+        int referencesIdx = colDef.toUpperCase().indexOf("REFERENCES");
+        if (referencesIdx != -1) {
+            isForeignKey = true;
+            String referencesPart = colDef.substring(referencesIdx + "REFERENCES".length()).trim();
+            
+            // Parse table and column
+            int openParenIdx = referencesPart.indexOf('(');
+            int closeParenIdx = referencesPart.indexOf(')', openParenIdx);
+            
+            if (openParenIdx != -1 && closeParenIdx != -1) {
+                referencesTable = referencesPart.substring(0, openParenIdx).trim();
+                referencesColumn = referencesPart.substring(openParenIdx + 1, closeParenIdx).trim();
+            }
+        }
+        
         // Map PostgreSQL types to PHP/Laravel types
         String phpType = mapPostgresToPhpType(dataType);
         
-        return new Column(name, dataType, phpType, isPrimaryKey, isNullable);
+        return new Column(name, dataType, phpType, isPrimaryKey, isNullable, isForeignKey, referencesTable, referencesColumn);
     }
-    
+        
     private static String mapPostgresToPhpType(String postgresType) {
         switch (postgresType.toLowerCase()) {
             case "int":
