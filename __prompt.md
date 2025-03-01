@@ -19,3 +19,11 @@ The goal is that i just input the table scheme, and then the program generate th
 
 Try to write a clean and maintaible code for the Java program (use OOP principles).
 For the generated code, use the best practice for a REST API CRUD functionality while maintaining the cleanest minimum viable code (that why i want you to create only Controller, Model, and Service). Iwant something functional but simple and clean ...
+
+/*----------------------------------------------------------------------- */
+
+Don't re-write the full code of the class or the file but just give the modified part tell me exactly where to modify. If you are adding new lines of code, just give me the new lines and tell me where to paste it.
+
+/*----------------------------------------------------------------------- */
+
+Is this implementation of a Laravel REST API CRUD generator take into account the FK relationship ?
