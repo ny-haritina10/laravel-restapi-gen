@@ -1,10 +1,19 @@
 package mg.itu.main;
 
-import mg.itu.test.Test;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+
+import mg.itu.frame.LaravelCrudGenerator;
 
 public class Main {
-    public static void main(String[] args) {
-        System.out.println(Test.hello());
-        System.out.println("Hello, world");
+     public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            new LaravelCrudGenerator().setVisible(true);
+        });
     }
 }
