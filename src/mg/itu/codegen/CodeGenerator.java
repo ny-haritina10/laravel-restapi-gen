@@ -124,7 +124,11 @@ public class CodeGenerator {
         controllerCode.append("    public function index(): JsonResponse\n");
         controllerCode.append("    {\n");
         controllerCode.append("        $").append(table.getName()).append(" = $this->").append(lcfirst(serviceName)).append("->getAll();\n");
-        controllerCode.append("        return response()->json($").append(table.getName()).append(");\n");
+        controllerCode.append("        return response()->json([\n");
+        controllerCode.append("            'status' => 'success',\n");
+        controllerCode.append("            'message' => 'All ").append(variableName).append("s retrieved successfully',\n");
+        controllerCode.append("            'data' => $").append(table.getName()).append("\n");
+        controllerCode.append("        ]);\n");
         controllerCode.append("    }\n\n");
         
         // Store method
@@ -133,11 +137,11 @@ public class CodeGenerator {
         controllerCode.append("     *\n");
         controllerCode.append("     * @param Request $request\n");
         controllerCode.append("     * @return JsonResponse\n");
-        controllerCode.append("     * @throws ValidationException\n");
         controllerCode.append("     */\n");
         controllerCode.append("    public function store(Request $request): JsonResponse\n");
         controllerCode.append("    {\n");
-        controllerCode.append("        $validated = $request->validate([\n");
+        controllerCode.append("        try {\n");
+        controllerCode.append("            $validated = $request->validate([\n");
         
         for (Column column : table.getColumns()) {
             if (!column.isPrimaryKey() && !column.isTimestamp()) {
@@ -159,13 +163,30 @@ public class CodeGenerator {
                     rules += "|string";
                 }
                 
-                controllerCode.append("            '").append(column.getName()).append("' => '").append(rules).append("',\n");
+                controllerCode.append("                '").append(column.getName()).append("' => '").append(rules).append("',\n");
             }
         }
         
-        controllerCode.append("        ]);\n\n");
-        controllerCode.append("        $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->create($validated);\n");
-        controllerCode.append("        return response()->json($").append(variableName).append(", 201);\n");
+        controllerCode.append("            ]);\n\n");
+        controllerCode.append("            $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->create($validated);\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'success',\n");
+        controllerCode.append("                'message' => '").append(modelName).append(" created successfully',\n");
+        controllerCode.append("                'data' => $").append(variableName).append("\n");
+        controllerCode.append("            ], 201);\n");
+        controllerCode.append("        } catch (ValidationException $e) {\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'error',\n");
+        controllerCode.append("                'message' => 'Validation failed',\n");
+        controllerCode.append("                'errors' => $e->errors()\n");
+        controllerCode.append("            ], 422);\n");
+        controllerCode.append("        } catch (\\Exception $e) {\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'error',\n");
+        controllerCode.append("                'message' => 'Failed to create ").append(variableName).append("',\n");
+        controllerCode.append("                'error' => $e->getMessage()\n");
+        controllerCode.append("            ], 500);\n");
+        controllerCode.append("        }\n");
         controllerCode.append("    }\n\n");
         
         // Show method
@@ -178,14 +199,29 @@ public class CodeGenerator {
         controllerCode.append("     */\n");
         controllerCode.append("    public function show(int $id, Request $request): JsonResponse\n");
         controllerCode.append("    {\n");
-        controllerCode.append("        $withRelations = $request->query('with_relations', false);\n");
-        controllerCode.append("        $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id, $withRelations);\n");
-        controllerCode.append("        \n");
-        controllerCode.append("        if (!$").append(variableName).append(") {\n");
-        controllerCode.append("            return response()->json(['message' => '").append(modelName).append(" not found'], 404);\n");
+        controllerCode.append("        try {\n");
+        controllerCode.append("            $withRelations = $request->query('with_relations', false);\n");
+        controllerCode.append("            $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id, $withRelations);\n");
+        controllerCode.append("            \n");
+        controllerCode.append("            if (!$").append(variableName).append(") {\n");
+        controllerCode.append("                return response()->json([\n");
+        controllerCode.append("                    'status' => 'error',\n");
+        controllerCode.append("                    'message' => '").append(modelName).append(" not found'\n");
+        controllerCode.append("                ], 404);\n");
+        controllerCode.append("            }\n");
+        controllerCode.append("            \n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'success',\n");
+        controllerCode.append("                'message' => '").append(modelName).append(" retrieved successfully',\n");
+        controllerCode.append("                'data' => $").append(variableName).append("\n");
+        controllerCode.append("            ]);\n");
+        controllerCode.append("        } catch (\\Exception $e) {\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'error',\n");
+        controllerCode.append("                'message' => 'Failed to retrieve ").append(variableName).append("',\n");
+        controllerCode.append("                'error' => $e->getMessage()\n");
+        controllerCode.append("            ], 500);\n");
         controllerCode.append("        }\n");
-        controllerCode.append("        \n");
-        controllerCode.append("        return response()->json($").append(variableName).append(");\n");
         controllerCode.append("    }\n\n");
         
         // Update method
@@ -195,17 +231,20 @@ public class CodeGenerator {
         controllerCode.append("     * @param Request $request\n");
         controllerCode.append("     * @param int $id\n");
         controllerCode.append("     * @return JsonResponse\n");
-        controllerCode.append("     * @throws ValidationException\n");
         controllerCode.append("     */\n");
         controllerCode.append("    public function update(Request $request, int $id): JsonResponse\n");
         controllerCode.append("    {\n");
-        controllerCode.append("        $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id);\n");
-        controllerCode.append("        \n");
-        controllerCode.append("        if (!$").append(variableName).append(") {\n");
-        controllerCode.append("            return response()->json(['message' => '").append(modelName).append(" not found'], 404);\n");
-        controllerCode.append("        }\n\n");
+        controllerCode.append("        try {\n");
+        controllerCode.append("            $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id);\n");
+        controllerCode.append("            \n");
+        controllerCode.append("            if (!$").append(variableName).append(") {\n");
+        controllerCode.append("                return response()->json([\n");
+        controllerCode.append("                    'status' => 'error',\n");
+        controllerCode.append("                    'message' => '").append(modelName).append(" not found'\n");
+        controllerCode.append("                ], 404);\n");
+        controllerCode.append("            }\n\n");
         
-        controllerCode.append("        $validated = $request->validate([\n");
+        controllerCode.append("            $validated = $request->validate([\n");
         
         for (Column column : table.getColumns()) {
             if (!column.isPrimaryKey() && !column.isTimestamp()) {
@@ -227,13 +266,30 @@ public class CodeGenerator {
                     rules += "|string";
                 }
                 
-                controllerCode.append("            '").append(column.getName()).append("' => '").append(rules).append("',\n");
+                controllerCode.append("                '").append(column.getName()).append("' => '").append(rules).append("',\n");
             }
         }
         
-        controllerCode.append("        ]);\n\n");
-        controllerCode.append("        $updated").append(modelName).append(" = $this->").append(lcfirst(serviceName)).append("->update($id, $validated);\n");
-        controllerCode.append("        return response()->json($updated").append(modelName).append(");\n");
+        controllerCode.append("            ]);\n\n");
+        controllerCode.append("            $updated").append(modelName).append(" = $this->").append(lcfirst(serviceName)).append("->update($id, $validated);\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'success',\n");
+        controllerCode.append("                'message' => '").append(modelName).append(" updated successfully',\n");
+        controllerCode.append("                'data' => $updated").append(modelName).append("\n");
+        controllerCode.append("            ]);\n");
+        controllerCode.append("        } catch (ValidationException $e) {\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'error',\n");
+        controllerCode.append("                'message' => 'Validation failed',\n");
+        controllerCode.append("                'errors' => $e->errors()\n");
+        controllerCode.append("            ], 422);\n");
+        controllerCode.append("        } catch (\\Exception $e) {\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'error',\n");
+        controllerCode.append("                'message' => 'Failed to update ").append(variableName).append("',\n");
+        controllerCode.append("                'error' => $e->getMessage()\n");
+        controllerCode.append("            ], 500);\n");
+        controllerCode.append("        }\n");
         controllerCode.append("    }\n\n");
         
         // Delete method
@@ -245,14 +301,28 @@ public class CodeGenerator {
         controllerCode.append("     */\n");
         controllerCode.append("    public function destroy(int $id): JsonResponse\n");
         controllerCode.append("    {\n");
-        controllerCode.append("        $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id);\n");
-        controllerCode.append("        \n");
-        controllerCode.append("        if (!$").append(variableName).append(") {\n");
-        controllerCode.append("            return response()->json(['message' => '").append(modelName).append(" not found'], 404);\n");
-        controllerCode.append("        }\n\n");
+        controllerCode.append("        try {\n");
+        controllerCode.append("            $").append(variableName).append(" = $this->").append(lcfirst(serviceName)).append("->findById($id);\n");
+        controllerCode.append("            \n");
+        controllerCode.append("            if (!$").append(variableName).append(") {\n");
+        controllerCode.append("                return response()->json([\n");
+        controllerCode.append("                    'status' => 'error',\n");
+        controllerCode.append("                    'message' => '").append(modelName).append(" not found'\n");
+        controllerCode.append("                ], 404);\n");
+        controllerCode.append("            }\n\n");
         
-        controllerCode.append("        $this->").append(lcfirst(serviceName)).append("->delete($id);\n");
-        controllerCode.append("        return response()->json(null, 204);\n");
+        controllerCode.append("            $this->").append(lcfirst(serviceName)).append("->delete($id);\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'success',\n");
+        controllerCode.append("                'message' => '").append(modelName).append(" deleted successfully'\n");
+        controllerCode.append("            ], 200);\n");
+        controllerCode.append("        } catch (\\Exception $e) {\n");
+        controllerCode.append("            return response()->json([\n");
+        controllerCode.append("                'status' => 'error',\n");
+        controllerCode.append("                'message' => 'Failed to delete ").append(variableName).append("',\n");
+        controllerCode.append("                'error' => $e->getMessage()\n");
+        controllerCode.append("            ], 500);\n");
+        controllerCode.append("        }\n");
         controllerCode.append("    }\n");
         controllerCode.append("}\n");
         
