@@ -352,7 +352,7 @@ public class CodeGenerator {
         serviceCode.append("     */\n");
         serviceCode.append("    public function getAll(): Collection\n");
         serviceCode.append("    {\n");
-        serviceCode.append("        return ").append(modelName).append("::all();\n");
+        serviceCode.append("        return ").append(modelName).append("::with($this->getRelationships())->get();\n");
         serviceCode.append("    }\n\n");
         
         // Find by ID method
@@ -365,10 +365,7 @@ public class CodeGenerator {
         serviceCode.append("     */\n");
         serviceCode.append("    public function findById(int $id, bool $withRelations = false): ?").append(modelName).append("\n");
         serviceCode.append("    {\n");
-        serviceCode.append("        if ($withRelations) {\n");
-        serviceCode.append("            return ").append(modelName).append("::with($this->getRelationships())->find($id);\n");
-        serviceCode.append("        }\n");
-        serviceCode.append("        return ").append(modelName).append("::find($id);\n");
+        serviceCode.append("        return $this->getQuery($withRelations)->find($id);\n");
         serviceCode.append("    }\n\n");
         
         // Create method
@@ -427,20 +424,43 @@ public class CodeGenerator {
         serviceCode.append("     */\n");
         serviceCode.append("    private function getRelationships(): array\n");
         serviceCode.append("    {\n");
-        serviceCode.append("        // This is auto-generated and may need manual adjustment\n");
         serviceCode.append("        return [\n");
 
-        // Add common relationship methods based on foreign keys
+        // Add relationship methods based on foreign keys
+        boolean hasRelationships = false;
         for (Column column : table.getColumns()) {
             if (column.isForeignKey() && column.getReferencesTable() != null) {
                 String relatedTable = column.getReferencesTable();
                 String methodName = Utils.toCamelCase(Utils.toSingular(relatedTable));
                 serviceCode.append("            '").append(methodName).append("',\n");
+                hasRelationships = true;
             }
+        }
+
+        if (!hasRelationships) {
+            serviceCode.append("            // No relationships detected\n");
         }
 
         serviceCode.append("        ];\n");
         serviceCode.append("    }\n");
+
+        // new utility method for query with relationships
+        serviceCode.append("\n");
+        serviceCode.append("    /**\n");
+        serviceCode.append("     * Get query with optional relationship loading.\n");
+        serviceCode.append("     *\n");
+        serviceCode.append("     * @param bool $withRelations\n");
+        serviceCode.append("     * @return \\Illuminate\\Database\\Eloquent\\Builder\n");
+        serviceCode.append("     */\n");
+        serviceCode.append("    private function getQuery(bool $withRelations = false)\n");
+        serviceCode.append("    {\n");
+        serviceCode.append("        $query = ").append(modelName).append("::query();\n");
+        serviceCode.append("        if ($withRelations) {\n");
+        serviceCode.append("            $query->with($this->getRelationships());\n");
+        serviceCode.append("        }\n");
+        serviceCode.append("        return $query;\n");
+        serviceCode.append("    }\n");
+
         serviceCode.append("}\n");
         
         writeToFile(outputPath + File.separator + serviceName + ".php", serviceCode.toString());
